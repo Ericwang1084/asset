@@ -33,7 +33,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
 .g2{display:grid;grid-template-columns:1fr 90px;gap:8px}
 .btn{border:0;background:var(--ac);color:#fff;padding:12px;border-radius:12px;font:inherit;font-weight:600}
 .lnk{border:0;background:none;color:var(--ac);font:inherit;padding:0}
-.act{display:flex;gap:18px;justify-content:flex-end;margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:14px}.x{color:var(--sub)}.msg{font-size:13px;color:var(--sub);margin-top:6px;min-height:18px}
+.act{display:flex;gap:18px;justify-content:flex-end;margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:14px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}.x{color:var(--sub)}.msg{font-size:13px;color:var(--sub);margin-top:6px;min-height:18px}
 </style>
 </head>
 <body>
@@ -44,7 +44,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
     <div class="num" id="pl" style="font-size:14px"></div>
     <div class="msg" id="msg"></div>
   </div>
-  <div class="tabs" id="tabs"><button data-t="stocks" class="on">台股</button><button data-t="us">美股</button><button data-t="gold">黃金</button><button data-t="funds">基金保單</button><button data-t="cash">現金</button><button data-t="pension">勞退金</button></div>
+  <div class="tabs" id="tabs"><button data-t="total" class="on">總資產</button><button data-t="stocks">台股</button><button data-t="us">美股</button><button data-t="gold">黃金</button><button data-t="funds">基金保單</button><button data-t="cash">現金</button><button data-t="pension">勞退金</button></div>
   <div id="bar"></div>
   <div id="list"></div>
   <form id="f"></form>
@@ -54,7 +54,7 @@ const $=s=>document.querySelector(s);
 let S={};try{S=JSON.parse(localStorage.getItem('assets'))||{}}catch(e){}
 S=Object.assign({stocks:[],us:[],funds:[],gold:{price:null,lots:[]},cash:[],pension:[],fx:null,t:null},S);
 if(!S.gold||!S.gold.lots)S.gold={price:null,lots:[]};
-let tab='stocks',open={},note='';
+let tab='total',open={},note='';
 const save=()=>{try{localStorage.setItem('assets',JSON.stringify(S))}catch(e){}};
 const fmt=n=>Math.round(n).toLocaleString('zh-TW');
 const f2=n=>n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -64,9 +64,10 @@ const cl=n=>n>0?'up':n<0?'dn':'';
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shr=n=>n>=1000?Math.floor(n/1000)+'張'+(n%1000?' '+n%1000+'股':''):n+'股';
 const FX=()=>S.fx||0;
+const TWF=0.995575;
 
 function calc(s){const sh=s.lots.reduce((a,l)=>a+l.n,0),cost=s.lots.reduce((a,l)=>a+l.n*l.p,0);
-  const avg=sh?cost/sh:0,px=s.price??avg,val=px*sh;return{sh,cost,avg,val,pl:val-cost,px}}
+  const avg=sh?cost/sh:0,px=s.price??avg,val=px*sh;return{sh,cost,avg,val,pl:Math.round(val*TWF-cost),px}}
 function calcU(s){const sh=s.lots.reduce((a,l)=>a+l.n,0),cu=s.lots.reduce((a,l)=>a+l.n*l.p,0),
   ct=s.lots.reduce((a,l)=>a+l.n*l.p*(l.fx||FX()),0),avg=sh?cu/sh:0,px=s.price??avg,vu=px*sh,vt=vu*FX();
   return{sh,cu,ct,avg,px,vu,vt,pu:vu-cu,pt:vt-ct}}
@@ -95,27 +96,35 @@ async function refresh(){
   await Promise.all(jobs);
   note=fail?'部分價格無法自動取得，可點價格手動輸入':'';S.t=Date.now();save();render()}
 
-const NAMES={stocks:'台股',us:'美股',gold:'黃金',funds:'基金保單',cash:'現金',pension:'勞退金'};
+const NAMES={total:'總資產',stocks:'台股',us:'美股',gold:'黃金',funds:'基金保單',cash:'現金',pension:'勞退金'};
 function render(){
-  let sv=0,sc=0,uv=0,uc=0;
-  S.stocks.forEach(s=>{const c=calc(s);sv+=c.val;sc+=c.cost});
+  let sv=0,sc=0,spl=0,uv=0,uc=0;
+  S.stocks.forEach(s=>{const c=calc(s);sv+=c.val;sc+=c.cost;spl+=c.pl});
   S.us.forEach(s=>{const c=calcU(s);uv+=c.vt;uc+=c.ct});
   const G=calcG(),fl=S.funds.reduce((a,f)=>a+f.val,0),fcst=S.funds.reduce((a,f)=>a+f.cost,0),ca=S.cash.reduce((a,x)=>a+x.amt,0),pe=S.pension.reduce((a,x)=>a+x.amt,0);
   $('#net').textContent=fmt(sv+uv+G.v+fl+ca+pe);
   const b=(l,v)=>l+' <b class="'+cl(v)+'">'+sg(v)+'</b>';
-  $('#pl').innerHTML='<span class="sub">損益　</span>'+b('台股',sv-sc)+'　'+b('美股',uv-uc)+'　'+b('黃金',G.pl)+'　'+b('基金保單',fl-fcst);
+  $('#pl').innerHTML='<span class="sub">損益　</span>'+b('台股',spl)+'　'+b('美股',uv-uc)+'　'+b('黃金',G.pl)+'　'+b('基金保單',fl-fcst);
   $('#msg').textContent=note||(S.t?'價格更新 '+new Date(S.t).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}):'');
   document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.t===tab));
   const cnt={stocks:S.stocks.length,us:S.us.length,gold:S.gold.lots.length,funds:S.funds.length};
-  $('#bar').innerHTML=tab in cnt?'<div class="row" style="margin:0 2px 10px"><span class="sub">共 '+cnt[tab]+(tab==='gold'||tab==='funds'?' 筆':' 檔')+'</span><button class="lnk" data-a="new">＋ 新增</button></div>':'';
+  $('#bar').innerHTML=tab in cnt?'<div class="row" style="margin:0 2px 10px"><span class="sub">共 '+cnt[tab]+(tab==='gold'||tab==='funds'?' 筆':' 檔')+(tab==='stocks'?'・損益已乘 0.995575':'')+'</span><button class="lnk" data-a="new">＋ 新增</button></div>':'';
   const L=$('#list'),F=$('#f'),empty='<div class="sub" style="text-align:center;padding:20px">尚未新增'+NAMES[tab]+'</div>';
-  if(tab==='stocks'){
+  F.style.display=tab==='total'?'none':'';
+  if(tab==='total'){
+    const parts=[['台股',sv,'#0a84ff','stocks'],['美股',uv,'#ff9f0a','us'],['黃金',G.v,'#f5c400','gold'],['基金保單',fl,'#bf5af2','funds'],['現金',ca,'#30b36b','cash'],['勞退金',pe,'#64d2ff','pension']].filter(x=>x[1]>0);
+    const tot=parts.reduce((a,x)=>a+x[1],0),C=2*Math.PI*25;let cum=0;
+    const segs=parts.map(x=>{const d=x[1]/tot*C,s='<circle r="25" cx="50" cy="50" fill="none" stroke="'+x[2]+'" stroke-width="50" stroke-dasharray="'+d+' '+(C-d)+'" stroke-dashoffset="'+(-cum)+'"/>';cum+=d;return s}).join('');
+    L.innerHTML=tot?'<div class="card"><svg viewBox="0 0 100 100" style="width:100%;max-width:280px;display:block;margin:4px auto 14px;transform:rotate(-90deg)">'+segs+'</svg>'+
+      parts.map(x=>'<div class="lot row" data-a="go" data-t="'+x[3]+'" style="cursor:pointer"><span><i class="dot" style="background:'+x[2]+'"></i>'+x[0]+'</span><span class="num">'+fmt(x[1])+'　<b>'+(x[1]/tot*100).toFixed(1)+'%</b></span></div>').join('')+
+      '<div class="lot row"><b>合計</b><b class="num">'+fmt(tot)+'</b></div></div>':'<div class="sub" style="text-align:center;padding:20px">尚無資產資料，請先到各分頁新增</div>';
+  }else if(tab==='stocks'){
     L.innerHTML=S.stocks.map((s,i)=>{const c=calc(s);return '<div class="card"><div class="row"><b>'+esc(s.code)+' '+esc(s.name)+'</b>'+
       '<button class="lnk num" data-a="px" data-i="'+i+'">'+(s.price?s.price.toFixed(2):'輸入股價')+'</button></div>'+
       '<div class="row sub"><span>'+shr(c.sh)+'・均價 '+c.avg.toFixed(2)+'</span><span class="num">市值 '+fmt(c.val)+'</span></div>'+
       '<div class="row"><button class="lnk sub" data-a="tg" data-i="'+i+'">'+(open[s.code]?'收合':'買入明細 ('+s.lots.length+')')+'</button>'+
       '<b class="num '+cl(c.pl)+'">'+sg(c.pl)+'　'+pc(c.cost?c.pl/c.cost:0)+'</b></div>'+
-      (open[s.code]?s.lots.map((l,j)=>{const p=(c.px-l.p)*l.n;return '<div class="lot row"><span>'+shr(l.n)+' @ '+l.p+'</span><span class="num '+cl(p)+'">'+sg(p)+
+      (open[s.code]?s.lots.map((l,j)=>{const p=Math.round(c.px*l.n*TWF-l.p*l.n);return '<div class="lot row"><span>'+shr(l.n)+' @ '+l.p+'</span><span class="num '+cl(p)+'">'+sg(p)+
         ' <button class="lnk x" data-a="dl" data-i="'+i+'" data-j="'+j+'">刪除</button></span></div>'}).join('')+
         '':'')+'<div class="act"><button class="lnk" data-a="add" data-i="'+i+'">＋ 加碼</button><button class="lnk x" data-a="ds" data-i="'+i+'">刪除</button></div></div>'}).join('')||empty;
     F.innerHTML='<b>新增台股買入（可分批加碼）</b><div class="g2"><input id="code" placeholder="股號，例如 2330" autocapitalize="characters"><select id="u"><option value="1000">張</option><option value="1">零股</option></select></div>'+
@@ -159,7 +168,8 @@ function render(){
 
 $('#tabs').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;render()}};
 $('#ref').onclick=refresh;
-const act=e=>{const d=e.target.dataset;if(!d.a)return;const i=+d.i;
+const act=e=>{const el=e.target.closest('[data-a]');if(!el)return;const d=el.dataset;const i=+d.i;
+  if(d.a==='go'){tab=d.t;render();window.scrollTo(0,0);return}
   const goForm=()=>{$('#f').scrollIntoView({behavior:'smooth',block:'center'});const el=$('#f input');if(el)el.focus()};
   if(d.a==='new'){goForm();return}
   if(d.a==='add'){goForm();$('#code').value=S[tab][i].code;$('#q').focus();return}
