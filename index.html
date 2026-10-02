@@ -48,7 +48,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
   <div id="bar"></div>
   <div id="list"></div>
   <form id="f"></form>
-  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v9・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
+  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v10・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
   <div class="card sub" id="dgout" style="display:none;margin-top:12px;font-size:12px;line-height:1.7"></div>
 </div>
 <script>
@@ -77,7 +77,7 @@ function calcG(){const g=S.gold,n=g.lots.reduce((a,l)=>a+l.n,0),c=g.lots.reduce(
   avg=n?c/n:0,px=g.price??avg;return{n,c,avg,px,v:px*n,pl:px*n-c}}
 
 const TO=(u,ms=6000)=>{const c=new AbortController();setTimeout(()=>c.abort(),ms);return fetch(u,{signal:c.signal})};
-const DIRECT=[u=>u],FREE=[u=>'https://corsproxy.io/?'+encodeURIComponent(u),u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)];
+const DIRECT=[u=>u],FREE=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)];
 const WK=()=>S.proxy?[u=>S.proxy.replace(/\/*$/,'/')+'?u='+encodeURIComponent(u)]:[];
 const ALL=()=>[...DIRECT,...WK(),...FREE],NOD=()=>[...WK(),...FREE],DAY=()=>[...DIRECT,...WK(),FREE[0]];
 // 同時嘗試直連與各代理，取最先成功的結果
@@ -85,11 +85,17 @@ function viaProxy(u,parse,list=ALL(),text=false){return new Promise(res=>{let n=
   list.forEach(async f=>{try{const b=await (await TO(f(u))).text();const r=parse(text?b:JSON.parse(b));if(r){res(r);return}}catch(e){}if(--n===0)res(null)})})}
 const parseMis=j=>{const out={};for(const i of j.msgArray||[]){const z=parseFloat(i.z),b=parseFloat((i.b||'').split('_')[0]),y=parseFloat(i.y);
   out[i.c]={n:i.n,p:[z,b,y].find(x=>x>0)}}return Object.keys(out).length?out:null};
-// 證交所盤後全部上市股票收盤價（www.twse.com.tw 允許瀏覽器直連）
-const twseDay=()=>viaProxy('https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json',j=>{
-  const ci=(j.fields||[]).indexOf('收盤價'),o={};if(ci<0||!j.data)return null;
-  for(const r of j.data){const p=parseFloat(String(r[ci]).replace(/,/g,''));if(p>0)o[r[0]]={n:r[1],p}}
-  return Object.keys(o).length?o:null},DAY());
+// 證交所盤後全部上市股票收盤價（www.twse.com.tw 允許瀏覽器直連；實際回傳可能是 CSV 或 JSON，兩者都支援）
+const csvRow=l=>{const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===','&&!q){o.push(c);c=''}else c+=ch}o.push(c);return o};
+const parseTwse=t=>{t=t.replace(/^\uFEFF/,'').trim();const o={};let rows,fields;
+  if(t[0]==='{'){const j=JSON.parse(t);fields=j.fields||[];rows=j.data||[]}
+  else{const L=t.split(/\r?\n/).filter(Boolean).map(csvRow);fields=L[0].map(x=>x.trim());rows=L.slice(1)}
+  const ci=fields.indexOf('收盤價'),ki=fields.indexOf('證券代號'),ni=fields.indexOf('證券名稱');
+  if(ci<0||ki<0)return null;
+  for(const r of rows){const p=parseFloat(String(r[ci]).replace(/,/g,''));if(p>0)o[String(r[ki]).trim()]={n:String(r[ni]||'').trim(),p}}
+  return Object.keys(o).length>100?o:null};
+const TWSE_DAY='https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json';
+const twseDay=()=>viaProxy(TWSE_DAY,parseTwse,DAY(),true);
 // Yahoo Finance（美股、匯率、台股備援）；美股再備援 Stooq
 const yq=async sym=>{
   const y=await viaProxy('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?interval=1d&range=1d',j=>{
@@ -255,14 +261,14 @@ try{const c=document.createElement('canvas');c.width=c.height=180;const x=c.getC
   x.fillStyle='#0a84ff';x.fillRect(0,0,180,180);x.fillStyle='#fff';x.font='bold 110px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('資',90,98);
   $('#icon').href=c.toDataURL('image/png')}catch(e){}
 async function probe(label,u,check,text){
-  const R=[['直連',x=>x],...(S.proxy?[['自架代理',WK()[0]]]:[]),['corsproxy',FREE[0]],['allorigins',FREE[1]],['codetabs',FREE[2]]];
+  const R=[['直連',x=>x],...(S.proxy?[['自架代理',WK()[0]]]:[]),['allorigins',FREE[0]],['codetabs',FREE[1]]];
   const rows=await Promise.all(R.map(async([n,f])=>{const t0=Date.now();try{const r=await TO(f(u),8000);if(!r.ok)throw new Error('HTTP '+r.status);
-    const b=await r.text();check(text?b:JSON.parse(b));return n+' ✓ '+(Date.now()-t0)+'ms'}catch(e){return n+' ✗ '+(e.name==='AbortError'?'逾時':e.message==='Failed to fetch'?'被瀏覽器擋(CORS/網路)':e.message)}}));
+    const b=await r.text();let v=b;if(!text){try{v=JSON.parse(b)}catch(e){throw new Error('回傳不是 JSON：'+b.slice(0,15))}}check(v);return n+' ✓ '+(Date.now()-t0)+'ms'}catch(e){return n+' ✗ '+(e.name==='AbortError'?'逾時':e.message==='Failed to fetch'?'被瀏覽器擋(CORS/網路)':e.message)}}));
   return '<b>'+label+'</b><br>'+rows.join('<br>')}
 $('#dg').onclick=async()=>{const o=$('#dgout');o.style.display='block';o.textContent='診斷中，約需 10 秒…';
   const need=(c,m)=>{if(!c)throw new Error(m||'內容格式不符')};
   const out=[await Promise.all([
-    probe('台股 證交所盤後收盤價','https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json',j=>need(j.data&&j.data.length>100)),
+    probe('台股 證交所盤後收盤價',TWSE_DAY,t=>need(parseTwse(t),'無法解析'),true),
     probe('台股 即時行情','https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2330.tw&json=1&delay=0',j=>need(j.msgArray&&j.msgArray.length)),
     probe('美股 Yahoo (AAPL)','https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d',j=>need(j.chart.result[0].meta.regularMarketPrice>0)),
     probe('黃金 臺灣銀行','https://rate.bot.com.tw/gold?Lang=zh-TW',t=>need(/本行買進/.test(t)),true)])];
