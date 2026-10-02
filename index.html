@@ -48,7 +48,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
   <div id="bar"></div>
   <div id="list"></div>
   <form id="f"></form>
-  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v10・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
+  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v11・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
   <div class="card sub" id="dgout" style="display:none;margin-top:12px;font-size:12px;line-height:1.7"></div>
 </div>
 <script>
@@ -262,7 +262,7 @@ try{const c=document.createElement('canvas');c.width=c.height=180;const x=c.getC
   $('#icon').href=c.toDataURL('image/png')}catch(e){}
 async function probe(label,u,check,text){
   const R=[['直連',x=>x],...(S.proxy?[['自架代理',WK()[0]]]:[]),['allorigins',FREE[0]],['codetabs',FREE[1]]];
-  const rows=await Promise.all(R.map(async([n,f])=>{const t0=Date.now();try{const r=await TO(f(u),8000);if(!r.ok)throw new Error('HTTP '+r.status);
+  const rows=await Promise.all(R.map(async([n,f])=>{const t0=Date.now();try{const r=await TO(f(u),8000);if(!r.ok){const tx=await r.text().catch(()=>'');throw new Error('HTTP '+r.status+(tx?'：'+tx.slice(0,25):''))}
     const b=await r.text();let v=b;if(!text){try{v=JSON.parse(b)}catch(e){throw new Error('回傳不是 JSON：'+b.slice(0,15))}}check(v);return n+' ✓ '+(Date.now()-t0)+'ms'}catch(e){return n+' ✗ '+(e.name==='AbortError'?'逾時':e.message==='Failed to fetch'?'被瀏覽器擋(CORS/網路)':e.message)}}));
   return '<b>'+label+'</b><br>'+rows.join('<br>')}
 $('#dg').onclick=async()=>{const o=$('#dgout');o.style.display='block';o.textContent='診斷中，約需 10 秒…';
@@ -272,8 +272,11 @@ $('#dg').onclick=async()=>{const o=$('#dgout');o.style.display='block';o.textCon
     probe('台股 即時行情','https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2330.tw&json=1&delay=0',j=>need(j.msgArray&&j.msgArray.length)),
     probe('美股 Yahoo (AAPL)','https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d',j=>need(j.chart.result[0].meta.regularMarketPrice>0)),
     probe('黃金 臺灣銀行','https://rate.bot.com.tw/gold?Lang=zh-TW',t=>need(/本行買進/.test(t)),true)])];
-  o.innerHTML='<div>網址：'+esc(location.hostname)+(/claude/.test(location.hostname)?'　<b>（Claude 預覽頁會封鎖所有外部連線，請改用 GitHub 網址）</b>':'')+'</div><br>'+out[0].join('<br><br>')};
-$('#px').onclick=()=>{const v=prompt('自架代理網址（Cloudflare Worker），留空代表不使用',S.proxy||'');if(v!==null){S.proxy=v.trim();save();refresh()}};
+  o.innerHTML='<div>網址：'+esc(location.hostname)+(/claude/.test(location.hostname)?'　<b>（Claude 預覽頁會封鎖所有外部連線，請改用 GitHub 網址）</b>':'')+'</div><div>自架代理：'+esc(S.proxy||'未設定')+'</div><br>'+out[0].join('<br><br>')};
+$('#px').onclick=async()=>{let v=prompt('自架代理網址（Cloudflare Worker），留空代表不使用\n目前：'+(S.proxy||'未設定'),S.proxy||'');if(v===null)return;v=v.trim();
+  if(v){if(!/^https?:\/\//.test(v))v='https://'+v;try{v=new URL(v).origin}catch(e){alert('網址格式不正確');return}
+    try{const t=await (await TO(v+'/',8000)).text();alert(t.trim()==='ok'?'代理測試成功 ✓':'這個網址有回應，但不是代理程式（回傳：'+t.slice(0,30)+'）。請確認貼的是 Worker 的網址')}catch(e){alert('連不到這個網址：'+e.message)}}
+  S.proxy=v;save();refresh()};
 render();refresh();
 </script>
 </body>
