@@ -48,7 +48,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
   <div id="bar"></div>
   <div id="list"></div>
   <form id="f"></form>
-  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v12・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
+  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v13・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
   <div class="card sub" id="dgout" style="display:none;margin-top:12px;font-size:12px;line-height:1.7"></div>
 </div>
 <script>
@@ -79,7 +79,7 @@ function calcG(){const g=S.gold,n=g.lots.reduce((a,l)=>a+l.n,0),c=g.lots.reduce(
 const TO=(u,ms=6000)=>{const c=new AbortController();setTimeout(()=>c.abort(),ms);return fetch(u,{signal:c.signal})};
 const DIRECT=[u=>u],FREE=[u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)];
 const WK=()=>S.proxy?[u=>S.proxy.replace(/\/*$/,'/')+'?u='+encodeURIComponent(u)]:[];
-const ALL=()=>[...DIRECT,...WK(),...FREE],NOD=()=>[...WK(),...FREE],DAY=()=>[...DIRECT,...WK(),FREE[0]];
+const ALL=()=>[...DIRECT,...WK(),...(S.proxy?[]:FREE)],NOD=()=>[...WK(),...(S.proxy?[]:FREE)],DAY=()=>[...DIRECT,...WK(),...(S.proxy?[]:[FREE[0]])];
 // 同時嘗試直連與各代理，取最先成功的結果
 function viaProxy(u,parse,list=ALL(),text=false){return new Promise(res=>{let n=list.length;
   list.forEach(async f=>{try{const b=await (await TO(f(u))).text();const r=parse(text?b:JSON.parse(b));if(r){res(r);return}}catch(e){}if(--n===0)res(null)})})}
@@ -129,8 +129,9 @@ async function refresh(){
     S.stocks.forEach(s=>{const r=q&&q[s.code];if(!r){bad.push(s.code);return}
       if(r.s==='d')dn=true;if(/[\u4e00-\u9fff]/.test(r.n)||s.name===s.code)s.name=r.n;if(r.p)s.price=r.p})}));
   S.us.forEach(s=>jobs.push(yq(s.code).then(r=>{if(!r){bad.push(s.code);return}s.price=r.p;if(!s.name||s.name===s.code)s.name=r.n})));
-  if(S.gold.lots.length||tab==='gold')jobs.push((async()=>{const r=await goldq();if(r){S.gold.price=r.buy;S.gold.src='臺銀回售價';return}
-    if(!S.gold.price||S.gold.src){const v=await goldIntl();if(v){S.gold.price=Math.round(v*100)/100;S.gold.src='國際金價換算(未含銀行價差)';return}}
+  if(S.gold.lots.length||tab==='gold')jobs.push((async()=>{const [r,v]=await Promise.all([goldq(),goldIntl()]);
+    if(r){S.gold.price=r.buy;S.gold.src='臺銀回售價';return}
+    if(v&&(!S.gold.price||S.gold.src)){S.gold.price=Math.round(v*100)/100;S.gold.src='國際金價換算(未含銀行價差)';return}
     if(!S.gold.price)bad.push('黃金')})());
   if(S.us.length)jobs.push(fxq().then(r=>{if(r)S.fx=r;else bad.push('匯率')}));
   await Promise.all(jobs);
@@ -275,7 +276,8 @@ $('#dg').onclick=async()=>{const o=$('#dgout');o.style.display='block';o.textCon
     probe('台股 證交所盤後收盤價',TWSE_DAY,t=>need(parseTwse(t),'無法解析'),true),
     probe('台股 即時行情','https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2330.tw&json=1&delay=0',j=>need(j.msgArray&&j.msgArray.length)),
     probe('美股 Yahoo (AAPL)','https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d',j=>need(j.chart.result[0].meta.regularMarketPrice>0)),
-    probe('黃金 臺灣銀行','https://rate.bot.com.tw/gold?Lang=zh-TW',t=>need(/本行買進/.test(t)),true)])];
+    probe('黃金 臺灣銀行','https://rate.bot.com.tw/gold?Lang=zh-TW',t=>need(/本行買進/.test(t)),true),
+    probe('黃金 國際金價(備援) GC=F','https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d',j=>need(j.chart.result[0].meta.regularMarketPrice>0))])];
   o.innerHTML='<div>網址：'+esc(location.hostname)+(/claude/.test(location.hostname)?'　<b>（Claude 預覽頁會封鎖所有外部連線，請改用 GitHub 網址）</b>':'')+'</div><div>自架代理：'+esc(S.proxy||'未設定')+'</div><br>'+out[0].join('<br><br>')};
 $('#px').onclick=async()=>{let v=prompt('自架代理網址（Cloudflare Worker），留空代表不使用\n目前：'+(S.proxy||'未設定'),S.proxy||'');if(v===null)return;v=v.trim();
   if(v){if(!/^https?:\/\//.test(v))v='https://'+v;try{v=new URL(v).origin}catch(e){alert('網址格式不正確');return}
