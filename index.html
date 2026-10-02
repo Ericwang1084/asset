@@ -48,12 +48,13 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
   <div id="bar"></div>
   <div id="list"></div>
   <form id="f"></form>
-  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v7・10/02</div>
+  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v9・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button></div>
+  <div class="card sub" id="dgout" style="display:none;margin-top:12px;font-size:12px;line-height:1.7"></div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
 let S={};try{S=JSON.parse(localStorage.getItem('assets'))||{}}catch(e){}
-S=Object.assign({stocks:[],us:[],funds:[],gold:{price:null,lots:[]},cash:[],pension:[],fx:null,t:null},S);
+S=Object.assign({stocks:[],us:[],funds:[],gold:{price:null,lots:[]},cash:[],pension:[],fx:null,t:null,proxy:''},S);
 if(!S.gold||!S.gold.lots)S.gold={price:null,lots:[]};
 let tab='total',open={},note='';
 const save=()=>{try{localStorage.setItem('assets',JSON.stringify(S))}catch(e){}};
@@ -76,9 +77,11 @@ function calcG(){const g=S.gold,n=g.lots.reduce((a,l)=>a+l.n,0),c=g.lots.reduce(
   avg=n?c/n:0,px=g.price??avg;return{n,c,avg,px,v:px*n,pl:px*n-c}}
 
 const TO=(u,ms=6000)=>{const c=new AbortController();setTimeout(()=>c.abort(),ms);return fetch(u,{signal:c.signal})};
-const PROX=[u=>u,u=>'https://corsproxy.io/?'+encodeURIComponent(u),u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)];
+const DIRECT=[u=>u],FREE=[u=>'https://corsproxy.io/?'+encodeURIComponent(u),u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)];
+const WK=()=>S.proxy?[u=>S.proxy.replace(/\/*$/,'/')+'?u='+encodeURIComponent(u)]:[];
+const ALL=()=>[...DIRECT,...WK(),...FREE],NOD=()=>[...WK(),...FREE],DAY=()=>[...DIRECT,...WK(),FREE[0]];
 // 同時嘗試直連與各代理，取最先成功的結果
-function viaProxy(u,parse,list=PROX,text=false){return new Promise(res=>{let n=list.length;
+function viaProxy(u,parse,list=ALL(),text=false){return new Promise(res=>{let n=list.length;
   list.forEach(async f=>{try{const b=await (await TO(f(u))).text();const r=parse(text?b:JSON.parse(b));if(r){res(r);return}}catch(e){}if(--n===0)res(null)})})}
 const parseMis=j=>{const out={};for(const i of j.msgArray||[]){const z=parseFloat(i.z),b=parseFloat((i.b||'').split('_')[0]),y=parseFloat(i.y);
   out[i.c]={n:i.n,p:[z,b,y].find(x=>x>0)}}return Object.keys(out).length?out:null};
@@ -86,22 +89,27 @@ const parseMis=j=>{const out={};for(const i of j.msgArray||[]){const z=parseFloa
 const twseDay=()=>viaProxy('https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json',j=>{
   const ci=(j.fields||[]).indexOf('收盤價'),o={};if(ci<0||!j.data)return null;
   for(const r of j.data){const p=parseFloat(String(r[ci]).replace(/,/g,''));if(p>0)o[r[0]]={n:r[1],p}}
-  return Object.keys(o).length?o:null},PROX.slice(0,2));
+  return Object.keys(o).length?o:null},DAY());
 // Yahoo Finance（美股、匯率、台股備援）；美股再備援 Stooq
 const yq=async sym=>{
   const y=await viaProxy('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?interval=1d&range=1d',j=>{
     const m=j.chart.result[0].meta;return m.regularMarketPrice>0?{n:m.shortName||m.longName||sym,p:m.regularMarketPrice}:null});
   if(y||/=|\.TW/.test(sym))return y;
   return viaProxy('https://stooq.com/q/l/?s='+encodeURIComponent(sym.toLowerCase())+'.us&f=sd2t2c&h&e=csv',t=>{
-    const l=t.trim().split('\n')[1];if(!l)return null;const p=parseFloat(l.split(',')[3]);return p>0?{n:sym,p}:null},PROX,true)};
+    const l=t.trim().split('\n')[1];if(!l)return null;const p=parseFloat(l.split(',')[3]);return p>0?{n:sym,p}:null},ALL(),true)};
 // 美元兌台幣：Yahoo → open.er-api.com
 const fxq=async()=>{const r=await yq('TWD=X');if(r)return r.p;
   return viaProxy('https://open.er-api.com/v6/latest/USD',j=>j.rates&&j.rates.TWD>0?j.rates.TWD:null)};
+// 臺灣銀行黃金存摺牌價（每公克）：回售價=本行買進，以此估算持有市值
+const goldq=()=>viaProxy('https://rate.bot.com.tw/gold?Lang=zh-TW',t=>{
+  const s=t.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ');
+  const m=s.match(/黃金存摺\s*本行賣出\s*([\d,]+)[\s\S]{0,60}?本行買進\s*([\d,]+)/);if(!m)return null;
+  const b=parseFloat(m[2].replace(/,/g,''));return b>0?{sell:parseFloat(m[1].replace(/,/g,'')),buy:b}:null},ALL(),true);
 // 台股：即時行情(代理) → 證交所盤後收盤價 → Yahoo(上市 .TW / 上櫃 .TWO)
 async function quotes(codes){
   codes=[...new Set(codes)];
   const ch=codes.flatMap(c=>['tse_'+c+'.tw','otc_'+c+'.tw']).join('|');
-  const [m,d]=await Promise.all([viaProxy('https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch='+ch+'&json=1&delay=0',parseMis,PROX.slice(1)),twseDay()]);
+  const [m,d]=await Promise.all([viaProxy('https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch='+ch+'&json=1&delay=0',parseMis,NOD()),twseDay()]);
   const out={};
   codes.forEach(c=>{if(m&&m[c]&&m[c].p)out[c]={...m[c],s:'m'};else if(d&&d[c])out[c]={...d[c],s:'d'}});
   await Promise.all(codes.filter(c=>!out[c]).map(async c=>{const r=(await yq(c+'.TW'))||(await yq(c+'.TWO'));if(r)out[c]={...r,s:'y'}}));
@@ -113,9 +121,10 @@ async function refresh(){
     S.stocks.forEach(s=>{const r=q&&q[s.code];if(!r){bad.push(s.code);return}
       if(r.s==='d')dn=true;if(/[\u4e00-\u9fff]/.test(r.n)||s.name===s.code)s.name=r.n;if(r.p)s.price=r.p})}));
   S.us.forEach(s=>jobs.push(yq(s.code).then(r=>{if(!r){bad.push(s.code);return}s.price=r.p;if(!s.name||s.name===s.code)s.name=r.n})));
+  if(S.gold.lots.length||tab==='gold')jobs.push(goldq().then(r=>{if(!r){bad.push('黃金');return}S.gold.price=r.buy;S.gold.src='臺銀回售價'}));
   if(S.us.length)jobs.push(fxq().then(r=>{if(r)S.fx=r;else bad.push('匯率')}));
   await Promise.all(jobs);
-  note=bad.length?'無法取得：'+bad.join('、')+'（可點價格手動輸入）':dn?'部分台股為證交所盤後收盤價（盤中可能是前一日收盤）':'';
+  note=bad.length?'無法取得：'+bad.join('、')+'（可點價格手動輸入，或點最下方「診斷連線」）':dn?'部分台股為證交所盤後收盤價（盤中可能是前一日收盤）':'';
   S.t=Date.now();save();render()}
 
 const NAMES={total:'總資產',stocks:'台股',us:'美股',gold:'黃金',funds:'基金保單',cash:'現金',pension:'勞退金'};
@@ -169,7 +178,7 @@ function render(){
   }else if(tab==='gold'){
     L.innerHTML='<div class="card"><div class="row"><b>黃金 '+f2(G.n)+' 公克</b><span class="sub">≈ '+f2(G.n/3.75)+' 台錢</span></div>'+
       '<div class="row sub"><span>均價 '+f2(G.avg)+' /公克</span><span class="num">市值 '+fmt(G.v)+'</span></div>'+
-      '<div class="row"><span class="sub">現價 <button class="lnk num" data-a="gp">'+(S.gold.price?f2(S.gold.price)+' /公克':'輸入金價')+'</button>'+(S.gold.price?' ≈ '+fmt(S.gold.price*3.75)+' /錢':'')+'</span>'+
+      '<div class="row"><span class="sub">現價 <button class="lnk num" data-a="gp">'+(S.gold.price?f2(S.gold.price)+' /公克':'輸入金價')+'</button>'+(S.gold.price?' ≈ '+fmt(S.gold.price*3.75)+' /錢':'')+(S.gold.src?'・'+S.gold.src:'')+'</span>'+
       '<b class="num '+cl(G.pl)+'">'+sg(G.pl)+'　'+pc(G.c?G.pl/G.c:0)+'</b></div>'+
       '<div class="act"><button class="lnk" data-a="new">＋ 新增買入</button><button class="lnk x" data-a="gclr">全部刪除</button></div></div>'+
       S.gold.lots.map((l,j)=>{const p=(G.px-l.p)*l.n;return '<div class="card row"><span>'+(l.name?esc(l.name)+'・':'')+f2(l.n)+' 公克 @ '+f2(l.p)+'</span><span class="num '+cl(p)+'">'+sg(p)+
@@ -190,7 +199,7 @@ function render(){
 }
 
 $('#tabs').onclick=e=>{if(e.target.dataset.t){tab=e.target.dataset.t;render()}};
-$('#ref').onclick=()=>{if(tab==='gold'){const v=parseFloat(prompt('目前金價（新台幣／每公克）',S.gold.price||''));if(v>0){S.gold.price=v;S.t=Date.now();save();render()}}else refresh()};
+$('#ref').onclick=refresh;
 const act=e=>{const el=e.target.closest('[data-a]');if(!el)return;const d=el.dataset;const i=+d.i;
   if(d.a==='go'){tab=d.t;render();window.scrollTo(0,0);return}
   const goForm=()=>{$('#f').scrollIntoView({behavior:'smooth',block:'center'});const el=$('#f input');if(el)el.focus()};
@@ -205,7 +214,7 @@ const act=e=>{const el=e.target.closest('[data-a]');if(!el)return;const d=el.dat
   if(d.a==='dl'){S[tab][i].lots.splice(+d.j,1);if(!S[tab][i].lots.length)S[tab].splice(i,1)}
   if(d.a==='ds'&&confirm('刪除整檔？'))S[tab].splice(i,1);
   if(d.a==='fx'){const v=parseFloat(prompt('1 美元兌新台幣',S.fx||''));if(v>0)S.fx=v}
-  if(d.a==='gp'){const v=parseFloat(prompt('目前金價（新台幣／每公克）',S.gold.price||''));if(v>0)S.gold.price=v}
+  if(d.a==='gp'){const v=parseFloat(prompt('目前金價（新台幣／每公克）',S.gold.price||''));if(v>0){S.gold.price=v;S.gold.src=''}}
   if(d.a==='gd'&&confirm('刪除這筆？'))S.gold.lots.splice(+d.j,1);
   if(d.a==='am'){const v=parseFloat(prompt('金額',S[tab][i].amt));if(!isNaN(v))S[tab][i].amt=v}
   if(d.a==='da'&&confirm('刪除？'))S[tab].splice(i,1);
@@ -245,6 +254,20 @@ $('#f').onsubmit=async e=>{e.preventDefault();
 try{const c=document.createElement('canvas');c.width=c.height=180;const x=c.getContext('2d');
   x.fillStyle='#0a84ff';x.fillRect(0,0,180,180);x.fillStyle='#fff';x.font='bold 110px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('資',90,98);
   $('#icon').href=c.toDataURL('image/png')}catch(e){}
+async function probe(label,u,check,text){
+  const R=[['直連',x=>x],...(S.proxy?[['自架代理',WK()[0]]]:[]),['corsproxy',FREE[0]],['allorigins',FREE[1]],['codetabs',FREE[2]]];
+  const rows=await Promise.all(R.map(async([n,f])=>{const t0=Date.now();try{const r=await TO(f(u),8000);if(!r.ok)throw new Error('HTTP '+r.status);
+    const b=await r.text();check(text?b:JSON.parse(b));return n+' ✓ '+(Date.now()-t0)+'ms'}catch(e){return n+' ✗ '+(e.name==='AbortError'?'逾時':e.message==='Failed to fetch'?'被瀏覽器擋(CORS/網路)':e.message)}}));
+  return '<b>'+label+'</b><br>'+rows.join('<br>')}
+$('#dg').onclick=async()=>{const o=$('#dgout');o.style.display='block';o.textContent='診斷中，約需 10 秒…';
+  const need=(c,m)=>{if(!c)throw new Error(m||'內容格式不符')};
+  const out=[await Promise.all([
+    probe('台股 證交所盤後收盤價','https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json',j=>need(j.data&&j.data.length>100)),
+    probe('台股 即時行情','https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2330.tw&json=1&delay=0',j=>need(j.msgArray&&j.msgArray.length)),
+    probe('美股 Yahoo (AAPL)','https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d',j=>need(j.chart.result[0].meta.regularMarketPrice>0)),
+    probe('黃金 臺灣銀行','https://rate.bot.com.tw/gold?Lang=zh-TW',t=>need(/本行買進/.test(t)),true)])];
+  o.innerHTML='<div>網址：'+esc(location.hostname)+(/claude/.test(location.hostname)?'　<b>（Claude 預覽頁會封鎖所有外部連線，請改用 GitHub 網址）</b>':'')+'</div><br>'+out[0].join('<br><br>')};
+$('#px').onclick=()=>{const v=prompt('自架代理網址（Cloudflare Worker），留空代表不使用',S.proxy||'');if(v!==null){S.proxy=v.trim();save();refresh()}};
 render();refresh();
 </script>
 </body>
