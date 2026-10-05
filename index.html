@@ -34,7 +34,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
 .g2{display:grid;grid-template-columns:1fr 90px;gap:8px}
 .btn{border:0;background:var(--ac);color:#fff;padding:12px;border-radius:12px;font:inherit;font-weight:600}
 .lnk{border:0;background:none;color:var(--ac);font:inherit;padding:0}
-.act{display:flex;gap:18px;justify-content:flex-end;margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:14px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}.x{color:var(--sub)}.msg{font-size:13px;color:var(--sub);margin-top:6px;min-height:18px}
+.act{display:flex;gap:18px;justify-content:flex-end;margin-top:8px;border-top:1px solid var(--line);padding-top:8px;font-size:14px}.nm{border:0;background:none;color:var(--tx);font:inherit;font-weight:700;padding:0;text-align:left}.nm.sub{color:var(--sub);font-weight:400;font-size:13px}.tg{border:0;background:var(--line);color:var(--sub);font:inherit;font-size:12px;padding:1px 8px;border-radius:8px;margin-left:6px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}.x{color:var(--sub)}.msg{font-size:13px;color:var(--sub);margin-top:6px;min-height:18px}
 </style>
 </head>
 <body>
@@ -49,7 +49,7 @@ input,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(-
   <div id="bar"></div>
   <div id="list"></div>
   <form id="f" novalidate></form>
-  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v18・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button>　<button class="lnk" id="ex" style="font-size:12px">匯出資料</button>　<button class="lnk" id="im" style="font-size:12px">匯入資料</button></div>
+  <div class="sub" style="text-align:center;margin-top:20px;font-size:12px">版本 v19・10/02　<button class="lnk" id="dg" style="font-size:12px">診斷連線</button>　<button class="lnk" id="px" style="font-size:12px">設定代理</button>　<button class="lnk" id="ex" style="font-size:12px">匯出資料</button>　<button class="lnk" id="im" style="font-size:12px">匯入資料</button></div>
   <div class="card sub" id="dgout" style="display:none;margin-top:12px;font-size:12px;line-height:1.7"></div>
 </div>
 <script>
@@ -130,7 +130,7 @@ async function refresh(){
   $('#msg').textContent='更新價格中…';const bad=[],jobs=[];let dn=false;
   if(S.stocks.length)jobs.push(quotes(S.stocks.map(s=>s.code)).then(q=>{
     S.stocks.forEach(s=>{const r=q&&q[s.code];if(!r){bad.push(s.code);return}
-      if(r.s==='d')dn=true;if(/[\u4e00-\u9fff]/.test(r.n)||s.name===s.code)s.name=r.n;if(r.p)s.price=r.p})}));
+      if(r.s==='d')dn=true;if(!s.custom&&(/[\u4e00-\u9fff]/.test(r.n)||s.name===s.code))s.name=r.n;if(r.p)s.price=r.p})}));
   S.us.forEach(s=>jobs.push(yq(s.code).then(r=>{if(!r){bad.push(s.code);return}s.price=r.p;if(!s.name||s.name===s.code)s.name=r.n})));
   if(S.gold.lots.length||tab==='gold')jobs.push((async()=>{const [r,v]=await Promise.all([goldq(),goldIntl()]);
     if(r){S.gold.price=r.buy;S.gold.src='臺銀回售價';return}
@@ -173,26 +173,26 @@ function render(){
       (tot-netAll!==0?'<div class="lot row" data-a="go" data-t="loans" style="cursor:pointer"><span><i class="dot" style="background:#8e8e93"></i>'+(lt>0&&Math.abs(tot-netAll-lt)<1?'貸款':'貸款及負值項目')+'</span><span class="num">−'+fmt(tot-netAll)+'</span></div>':'')+
       '<div class="lot row"><b>總資產</b><b class="num">'+fmt(netAll)+'</b></div></div>':'<div class="sub" style="text-align:center;padding:20px">尚無資產資料，請先到各分頁新增</div>';
   }else if(tab==='stocks'){
-    L.innerHTML=S.stocks.map((s,i)=>{const c=calc(s);return '<div class="card"><div class="row"><b>'+esc(s.code)+' '+esc(s.name)+'</b>'+
+    L.innerHTML=S.stocks.map((s,i)=>{const c=calc(s);return '<div class="card"><div class="row"><b>'+esc(s.code)+' <button class="nm" data-a="rn" data-k="stocks" data-i="'+i+'">'+esc(s.name)+'</button></b>'+
       '<button class="lnk num" data-a="px" data-i="'+i+'">'+(s.price?s.price.toFixed(2):'輸入股價')+'</button></div>'+
       '<div class="row sub"><span>'+shr(c.sh)+'・均價 '+c.avg.toFixed(2)+'</span><span class="num">市值 '+fmt(c.val)+'</span></div>'+
       '<div class="row"><button class="lnk sub" data-a="tg" data-i="'+i+'">'+(open[s.code]?'收合':'買入明細 ('+s.lots.length+')')+'</button>'+
       '<b class="num '+cl(c.pl)+'">'+sg(c.pl)+'　'+pc(c.cost?c.pl/c.cost:0)+'</b></div>'+
       (open[s.code]?s.lots.map((l,j)=>{const p=Math.round(c.px*l.n*TWF-l.p*l.n);return '<div class="lot row"><span>'+shr(l.n)+' @ '+l.p+'</span><span class="num '+cl(p)+'">'+sg(p)+
-        ' <button class="lnk x" data-a="dl" data-i="'+i+'" data-j="'+j+'">刪除</button></span></div>'}).join('')+
+        ' <button class="lnk" data-a="le" data-i="'+i+'" data-j="'+j+'">編輯</button> <button class="lnk x" data-a="dl" data-i="'+i+'" data-j="'+j+'">刪除</button></span></div>'}).join('')+
         '':'')+'<div class="act"><button class="lnk" data-a="add" data-i="'+i+'">＋ 加碼</button><button class="lnk x" data-a="ds" data-i="'+i+'">刪除</button></div></div>'}).join('')||empty;
     F.innerHTML='<b>新增台股買入（可分批加碼）</b><div class="g2"><input id="code" placeholder="股號，例如 2330" autocapitalize="characters"><select id="u"><option value="1000">張</option><option value="1">零股</option></select></div>'+
       '<div class="g2"><input id="q" type="number" step="any" inputmode="decimal" placeholder="數量"><input id="p" type="number" step="0.01" inputmode="decimal" placeholder="買入價"></div><button class="btn">加入</button>';
   }else if(tab==='us'){
     L.innerHTML='<div class="card row"><span class="sub">美元匯率 USD/TWD</span><button class="lnk num" data-a="fx">'+(S.fx?S.fx.toFixed(3):'輸入匯率')+'</button></div>'+
-      (S.us.map((s,i)=>{const c=calcU(s);return '<div class="card"><div class="row"><b>'+esc(s.code)+' <span class="sub">'+esc(s.name)+'</span></b>'+
+      (S.us.map((s,i)=>{const c=calcU(s);return '<div class="card"><div class="row"><b>'+esc(s.code)+' <button class="nm sub" data-a="rn" data-k="us" data-i="'+i+'">'+esc(s.name)+'</button></b>'+
       '<button class="lnk num" data-a="px" data-i="'+i+'">'+(s.price?'$'+f2(s.price):'輸入股價')+'</button></div>'+
       '<div class="row sub"><span>'+(+c.sh.toFixed(4))+' 股・均價 $'+f2(c.avg)+'</span><span class="num">市值 $'+f2(c.vu)+' ≈ '+fmt(c.vt)+'</span></div>'+
       '<div class="row"><button class="lnk sub" data-a="tg" data-i="'+i+'">'+(open[s.code]?'收合':'買入明細 ('+s.lots.length+')')+'</button>'+
       '<b class="num '+cl(c.pt)+'">'+sg(c.pt)+'　'+pc(c.ct?c.pt/c.ct:0)+'</b></div>'+
       '<div class="sub" style="text-align:right">美元損益 '+(c.pu>0?'+':'')+f2(c.pu)+'（含匯差）</div>'+
       (open[s.code]?s.lots.map((l,j)=>{const p=(c.px-l.p)*l.n;return '<div class="lot row"><span>'+(+l.n.toFixed(4))+' 股 @ $'+l.p+(l.fx?'・匯率 '+l.fx.toFixed(2):'')+'</span><span class="num '+cl(p)+'">'+(p>0?'+':'')+f2(p)+
-        ' <button class="lnk x" data-a="dl" data-i="'+i+'" data-j="'+j+'">刪除</button></span></div>'}).join('')+
+        ' <button class="lnk" data-a="le" data-i="'+i+'" data-j="'+j+'">編輯</button> <button class="lnk x" data-a="dl" data-i="'+i+'" data-j="'+j+'">刪除</button></span></div>'}).join('')+
         '':'')+'<div class="act"><button class="lnk" data-a="add" data-i="'+i+'">＋ 加碼</button><button class="lnk x" data-a="ds" data-i="'+i+'">刪除</button></div></div>'}).join('')||empty);
     F.innerHTML='<b>新增美股買入（可分批加碼）</b><input id="code" placeholder="代號，例如 AAPL、VOO" autocapitalize="characters">'+
       '<div class="g2" style="grid-template-columns:1fr 1fr"><input id="q" type="number" step="any" inputmode="decimal" placeholder="股數（可小數）"><input id="p" type="number" step="0.01" inputmode="decimal" placeholder="買入價 USD"></div>'+
@@ -204,12 +204,12 @@ function render(){
       '<b class="num '+cl(G.pl)+'">'+sg(G.pl)+'　'+pc(G.c?G.pl/G.c:0)+'</b></div>'+
       '<div class="act"><button class="lnk" data-a="new">＋ 新增買入</button><button class="lnk x" data-a="gclr">全部刪除</button></div></div>'+
       S.gold.lots.map((l,j)=>{const p=(G.px-l.p)*l.n;return '<div class="card row"><span>'+(l.name?esc(l.name)+'・':'')+f2(l.n)+' 公克 @ '+f2(l.p)+'</span><span class="num '+cl(p)+'">'+sg(p)+
-        ' <button class="lnk x" data-a="gd" data-j="'+j+'">刪除</button></span></div>'}).join('');
+        ' <button class="lnk" data-a="ge" data-j="'+j+'">編輯</button> <button class="lnk x" data-a="gd" data-j="'+j+'">刪除</button></span></div>'}).join('');
     F.innerHTML='<b>新增黃金買入</b><input id="gn" placeholder="名稱（選填，例如 黃金存摺、金條）">'+
       '<div class="g2"><input id="q" type="number" step="any" inputmode="decimal" placeholder="數量"><select id="gu"><option value="1">公克</option><option value="3.75">台錢</option><option value="37.5">台兩</option></select></div>'+
       '<input id="p" type="number" step="0.01" inputmode="decimal" placeholder="買入單價 NT$（依上方所選單位）"><button class="btn">加入</button>';
   }else if(tab==='house'){
-    L.innerHTML=S.house.map((x,i)=>{const net=x.val-x.loan;return '<div class="card"><div class="row"><b>'+esc(x.name)+'</b><b class="num">淨值 '+fmt(net)+'</b></div>'+
+    L.innerHTML=S.house.map((x,i)=>{const net=x.val-x.loan;return '<div class="card"><div class="row"><button class="nm" data-a="rn" data-k="house" data-i="'+i+'">'+esc(x.name)+'</button><b class="num">淨值 '+fmt(net)+'</b></div>'+
       '<div class="row sub"><span>市價 <button class="lnk num" data-a="hv" data-i="'+i+'">'+fmt(x.val)+'</button></span><span>貸款 <button class="lnk num" data-a="hl" data-i="'+i+'">'+fmt(x.loan)+'</button></span></div>'+
       '<div class="row sub"><span>貸款成數 '+(x.val?(x.loan/x.val*100).toFixed(1):'0.0')+'%</span><span>淨值 = 市價 − 貸款</span></div>'+
       '<div class="act"><button class="lnk x" data-a="hd" data-i="'+i+'">刪除</button></div></div>'}).join('')||empty;
@@ -217,17 +217,17 @@ function render(){
   }else if(tab==='loans'){
     const by=t=>S.loans.filter(x=>x.type===t).reduce((a,x)=>a+x.amt,0);
     L.innerHTML=(S.loans.length?'<div class="card"><div class="row"><span class="sub">貸款合計（總資產會扣除）</span><b class="num">'+fmt(lt)+'</b></div><div class="row sub" style="margin-top:6px"><span>信貸 '+fmt(by('信貸'))+'</span><span>融資 '+fmt(by('融資'))+'</span><span>質押 '+fmt(by('質押'))+'</span></div></div>':'')+
-      S.loans.map((x,i)=>'<div class="card"><div class="row"><b>'+esc(x.name)+' <span class="sub">'+esc(x.type)+'</span></b><button class="lnk num" data-a="la" data-i="'+i+'">'+fmt(x.amt)+'</button></div><div class="act"><button class="lnk x" data-a="ld" data-i="'+i+'">刪除</button></div></div>').join('')||empty;
+      S.loans.map((x,i)=>'<div class="card"><div class="row"><span><button class="nm" data-a="rn" data-k="loans" data-i="'+i+'">'+esc(x.name)+'</button><button class="tg" data-a="ty" data-k="loans" data-i="'+i+'">'+esc(x.type)+'</button></span><button class="lnk num" data-a="la" data-i="'+i+'">'+fmt(x.amt)+'</button></div><div class="act"><button class="lnk x" data-a="ld" data-i="'+i+'">刪除</button></div></div>').join('')||empty;
     F.innerHTML='<b>新增貸款</b><input id="ln" placeholder="名稱（選填），例如 玉山信貸、券商融資"><select id="ltp"><option>信貸</option><option>融資</option><option>質押</option></select><input id="lam" type="number" inputmode="decimal" placeholder="貸款餘額 NT$"><button class="btn">加入</button>';
   }else if(tab==='funds'){
-    L.innerHTML=S.funds.map((f,i)=>{const pl=f.val-f.cost;return '<div class="card"><div class="row"><b>'+esc(f.name)+' <span class="sub">'+esc(f.type)+'</span></b>'+
+    L.innerHTML=S.funds.map((f,i)=>{const pl=f.val-f.cost;return '<div class="card"><div class="row"><span><button class="nm" data-a="rn" data-k="funds" data-i="'+i+'">'+esc(f.name)+'</button><button class="tg" data-a="ty" data-k="funds" data-i="'+i+'">'+esc(f.type)+'</button></span>'+
       '<button class="lnk num" data-a="fv" data-i="'+i+'">現值 '+fmt(f.val)+'</button></div>'+
       '<div class="row sub"><span>投入 '+fmt(f.cost)+'</span><b class="num '+cl(pl)+'">'+sg(pl)+'　'+pc(f.cost?pl/f.cost:0)+'</b></div>'+
       '<div class="act"><button class="lnk" data-a="fe" data-i="'+i+'">修改投入</button><button class="lnk x" data-a="fd" data-i="'+i+'">刪除</button></div></div>'}).join('')||empty;
     F.innerHTML='<b>新增基金保單</b><input id="fn" placeholder="名稱，例如 全球股票基金、儲蓄險"><select id="ft"><option>基金</option><option>保單</option><option>其他</option></select>'+
       '<div class="g2" style="grid-template-columns:1fr 1fr"><input id="fc" type="number" inputmode="decimal" placeholder="投入金額 NT$"><input id="fv" type="number" inputmode="decimal" placeholder="目前價值 NT$"></div><button class="btn">加入</button>';
   }else{
-    L.innerHTML=S[tab].map((a,i)=>'<div class="card row"><span>'+esc(a.name)+'</span><span><button class="lnk num" data-a="am" data-i="'+i+'">'+fmt(a.amt)+'</button> <button class="lnk x" data-a="da" data-i="'+i+'">✕</button></span></div>').join('')||empty;
+    L.innerHTML=S[tab].map((a,i)=>'<div class="card row"><button class="nm" data-a="rn" data-k="'+tab+'" data-i="'+i+'">'+esc(a.name)+'</button><span><button class="lnk num" data-a="am" data-i="'+i+'">'+fmt(a.amt)+'</button> <button class="lnk x" data-a="da" data-i="'+i+'">✕</button></span></div>').join('')||empty;
     F.innerHTML='<b>新增'+NAMES[tab]+'</b><input id="an" placeholder="名稱，例如 '+(tab==='cash'?'活存':'勞退專戶')+'"><input id="am" type="number" inputmode="decimal" placeholder="金額"><button class="btn">加入</button>'}
 }
 
@@ -239,6 +239,14 @@ const act=e=>{const el=e.target.closest('[data-a]');if(!el)return;const d=el.dat
   if(d.a==='new'){goForm();return}
   if(d.a==='add'){goForm();$('#code').value=S[tab][i].code;$('#q').focus();return}
   if(d.a==='gclr'){if(confirm('刪除所有黃金買入紀錄？')){S.gold.lots=[];save();render()}return}
+  if(d.a==='rn'){const it=S[d.k][i],v=prompt('名稱',it.name);if(v!==null&&v.trim()){it.name=v.trim();if(d.k==='stocks'||d.k==='us')it.custom=true}}
+  if(d.a==='ty'){const T=d.k==='loans'?['信貸','融資','質押']:['基金','保單','其他'],it=S[d.k][i];it.type=T[(T.indexOf(it.type)+1)%T.length]}
+  if(d.a==='le'){const l=S[tab][i].lots[+d.j],n=parseFloat(prompt(tab==='stocks'?'股數（1 張 = 1000 股）':'股數（可小數）',l.n));
+    if(n>0){const pr_=parseFloat(prompt(tab==='stocks'?'每股買入價（可到小數 2 位）':'每股買入價 USD',l.p));
+      if(pr_>0){l.n=tab==='stocks'?Math.round(n):n;l.p=pr_;
+        if(tab==='us'){const f=parseFloat(prompt('買入時匯率（USD/TWD）',l.fx||S.fx||''));if(f>0)l.fx=f}}}}
+  if(d.a==='ge'){const l=S.gold.lots[+d.j],nm=prompt('名稱（可留空）',l.name||'');
+    if(nm!==null){const n=parseFloat(prompt('數量（公克）',l.n));if(n>0){const pr_=parseFloat(prompt('買入單價（每公克 NT$）',l.p));if(pr_>0){l.name=nm.trim();l.n=n;l.p=pr_}}}}
   if(d.a==='hv'){const v=parseFloat(prompt('房屋市價（新台幣）',S.house[i].val));if(v>=0)S.house[i].val=v}
   if(d.a==='hl'){const v=parseFloat(prompt('目前貸款餘額（新台幣）',S.house[i].loan));if(v>=0)S.house[i].loan=v}
   if(d.a==='hd'&&confirm('刪除這筆？'))S.house.splice(i,1);
